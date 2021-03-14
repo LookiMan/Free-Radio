@@ -53,6 +53,6 @@ _Окно выбора радиостанции_
 ![]( https://github.com/topdefaultuser/Free-Radio/blob/main/Screenshots/SelectRadioStationForm.PNG)
 
 
-_Окно выбора добавления новой радиостанции_
+_Окно добавления новой радиостанции_
 
 ![]( https://github.com/topdefaultuser/Free-Radio/blob/main/Screenshots/AppendStationForm.PNG)
