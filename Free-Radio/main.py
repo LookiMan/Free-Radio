@@ -164,11 +164,19 @@ def main():
     # Получит url-адрес прошлой радиостанции, если по какой-то причине не удалось получить имя радиостанции, 
     # установит url-адрес XITFM.
     radio_station_url = utils.RADIO_STATIONS.get(radio_station_name, utils.RADIO_STATIONS.get('XITFM'))
-    if radio_station_url is not None:
+
+    if len(sys.argv) > 1 and os.path.exists(sys.argv[1]) and os.path.isfile(sys.argv[1]):
+        # Установка имени радиостанции в заголовке окна радио
+        widget.set_title(sys.argv[1])
+        # Установка url адреса последней радиостанции
+        player.set_media(sys.argv[1])
+
+    elif radio_station_url is not None:
         # Установка имени радиостанции в заголовке окна радио
         widget.set_title(radio_station_name)
         # Установка url адреса последней радиостанции
         player.set_media(radio_station_url)
+            
 
     # Установка громкости на уровень с прошлой сессии
     last_volume = config.get('last_volume')
