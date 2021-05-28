@@ -8,11 +8,14 @@
 **Важно.** Для работы данной программы необходимо установить **VLC media player.**
 
 
+<hr>
+
+
 В папке Free-Radio-Executable находится полностью готовая к использованию программа, скомпилированная с помощью [easycompiller](https://github.com/topdefaultuser/easycompiller).
 
 Версия ```python 3.7.1```, компилятор ```PyInstaller```. 
 
-Комманда для компиляции: ```python -m PyInstaller -y  -F -w --noupx -i"images\icon.ico" "main.py"```
+Команда для компиляции: ```python -m PyInstaller -y  -F -w --noupx -i"images\icon.ico" "main.py"```
 
 Хеш-сумма:
 
@@ -39,6 +42,7 @@ SHA-256: 20EA3783DE415F398FEBFBDCDB25C51D0D115212495A1EB1E5CD57F5C9B74C72
 Если в данной папке нет файла под именем "radios.json", вручную скопируйте файл "radios.json" с папки data
 которая находится в папке Free-Radio-Executable.
 
+По желанию можно изменить задний фон заменив изображение background_image.png на своё.
 
 <hr>
 
