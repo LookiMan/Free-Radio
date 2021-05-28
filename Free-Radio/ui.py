@@ -1,17 +1,12 @@
 import os
 import sys
-import ctypes
 
 from PyQt5.QtWidgets import QApplication, QWidget
-from PyQt5.QtWidgets import QPushButton, QMessageBox, QLabel, QSlider, QComboBox, QLineEdit
+from PyQt5.QtWidgets import QPushButton, QMessageBox, QLabel, QGroupBox, QComboBox, QLineEdit
 from PyQt5 import QtCore, QtGui
 
 import utils
 
-
-# 
-def show_info(title: str, message_text: str):
-    QMessageBox.information(None, title, message_text, QMessageBox.Ok)
 
 # 
 def show_warning(title: str, message_text: str):
@@ -30,282 +25,612 @@ def show_question(title: str, message_text: str):
         return False
 
 
-class BaseForm():
-    """ Вынесены общие методы для всех форм """
+class ClickedQLabel(QLabel):
+    """ Класс добавляющий событие клика базовому классу QLabel """
+    clicked = QtCore.pyqtSignal()
 
-    def _customize_window(self):
-        # Установка высоты шапки окна
-        header_height = 15
-        # Убираем стандартную рамку
-        self.Form.setWindowFlags(QtCore.Qt.FramelessWindowHint)
-        # Установка иконки 
-        icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(os.path.join('images', 'icon.ico')), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.Form.setWindowIcon(icon)
-        # 
-        self.header = QLabel(self.Form)
-        self.header.setGeometry(QtCore.QRect(0, 0, self.form_width, header_height))
-        pixmap = QtGui.QPixmap(os.path.join('images', 'header.png'))
-        self.header.setPixmap(pixmap)
-        self.header.setObjectName('header')
-        # Добавляем обработку событий нажатия отжатия клавиш мыши,
-        # а также движения курсора для реализации перемещения окна радио
-        self._setMoveEvents(self.header)
+    def mouseReleaseEvent(self, event):
+        self.clicked.emit()
+        super().mouseReleaseEvent(event)
 
-        self.closeHeaderButton = QPushButton(self.Form)
-        self.closeHeaderButton.setGeometry(QtCore.QRect(self.form_width-20, 2, 11, 11))
-        pixmap = QtGui.QIcon()
-        pixmap.addPixmap(QtGui.QPixmap(os.path.join('images', 'close.png')), 
-            QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.closeHeaderButton.setIcon(pixmap)
-        self.closeHeaderButton.setObjectName('close')
-        self.closeHeaderButton.clicked.connect(self.closeEvent)
-        self.closeHeaderButton.setFlat(True)
-        self.closeHeaderButton.setToolTip('Закрыть')
 
-        self.backgroundLabel = QLabel(self.Form)
-        self.backgroundLabel.setGeometry(QtCore.QRect(0, 15, self.form_width, self.form_height-header_height))
-        pixmap = QtGui.QPixmap(os.path.join('images', 'background.png'))
-        pixmap_resized = pixmap.scaled(self.form_width, self.form_height-header_height)
-        self.backgroundLabel.setPixmap(pixmap_resized)
-        self.backgroundLabel.setObjectName('backgroundLabel')
+class BaseMoveEvents(QWidget):
+    """ Реализация базовых методов для шапки приложения """
+    def _get_window(self):
+        return self._parent.window()
 
+
+    def _get_window_width(self):
+        return self._parent.window().geometry().width()
+
+
+    def _get_window_height(self):
+        return self._parent.window().geometry().height()
+
+
+    def _get_screen_size(self):
+        return (utils.get_screen_width(), utils.get_screen_height())
+
+
+    def mouseMoveEvent(self, event):
+        win = self._get_window()
+        screensize = self._get_screen_size()
+
+        if(self.b_move):
+            x = event.globalX() + self.x_korr - self.lastPoint.x()
+            y = event.globalY() + self.y_korr - self.lastPoint.y()
+            if x >= screensize[0] - self._get_window_width():
+                x = screensize[0] - self._get_window_width()
+            if x <= 0:
+                x = 0
+            if y >= screensize[1] - self._get_window_height():
+                y = screensize[1] - self._get_window_height()
+            if y <= 0:
+                y = 0
+            win.move(x, y)
+            
+        super().mouseMoveEvent(event)
+
+
+    def mousePressEvent(self, event):
+        if(event.button() == QtCore.Qt.LeftButton):
+            win = self._get_window()
+            x_korr = win.frameGeometry().x() - win.geometry().x()
+            y_korr = win.frameGeometry().y() - win.geometry().y()
+            parent = self
+            while not parent == win:
+                x_korr -= parent.x()
+                y_korr -= parent.y()
+                parent = parent.parent()
+
+            self.__dict__.update({'lastPoint': event.pos(),  'b_move': True,  'x_korr': x_korr,  'y_korr': y_korr})
+        else:
+            self.__dict__.update({'b_move': False})
+
+        self.setCursor(QtCore.Qt.SizeAllCursor)
+        super().mousePressEvent(event)
+
+
+    def mouseReleaseEvent(self, event):
+        if(hasattr(self, 'x_korr') and hasattr(self, 'y_korr')):
+            self.__dict__.update({'b_move': False})
+            x = event.globalX() + self.x_korr - self.lastPoint.x()
+            y = event.globalY() + self.y_korr - self.lastPoint.y()
+
+        self.setCursor(QtCore.Qt.ArrowCursor) 
+        super().mouseReleaseEvent(event)
+
+
+class Panel(QLabel, BaseMoveEvents):
+    """ Панель заголовка окна приложения """
+    def __init__(self, parent, width: int, height: int):
+        super(QLabel, self).__init__(parent)
+        self._parent = parent 
+        self._width = width
+        self._height = height
+        self.setGeometry(QtCore.QRect(0, 0, self._width, self._height))
+        self._pixmap = QtGui.QPixmap('images\\header.png')
+        self.setScaledContents(True)
+        self.setPixmap(self._pixmap)
+        self.setObjectName('header')
+
+
+class Title(QLabel, BaseMoveEvents):
+    """ Заголовок окна приложения """
+    def __init__(self, parent, width: int, height: int):
+        super(QLabel, self).__init__(parent)
+        self._parent = parent 
+        self._width = width
+        self._height = height
         self.font = QtGui.QFont()
         self.font.setFamily('Segoe UI Semibold')
         self.font.setPointSize(8)
         self.font.setWeight(75)
         self.font.setBold(True)
-       
-        self.titleLabel = QLabel(self.Form)
-        self.titleLabel.setFont(self.font)
-        self.titleLabel.setGeometry(QtCore.QRect(10, 0, self.form_width-50, 15))
-        self.titleLabel.setText('Заголовок')
-        self.titleLabel.setObjectName('titleLabel')
-        self._setMoveEvents(self.titleLabel)
+        self.setStyleSheet('color: rgb(255,255,255);')
+        self.setFont(self.font)
+        self.setGeometry(QtCore.QRect(10, 0, self._width, self._height))
+        self.setText('Заголовок')
+        self.setObjectName('titleLabel')
 
-   # 
-    def _setMoveEvents(self, widget):
-        win = widget.parentWidget().window()
-        cursorShape = widget.cursor().shape()
-        user32 = ctypes.windll.user32
-        screensize = (user32.GetSystemMetrics(0), user32.GetSystemMetrics(1))
-        moveSource = getattr(widget, 'mouseMoveEvent')
-        pressSource = getattr(widget, 'mousePressEvent')
-        releaseSource = getattr(widget, 'mouseReleaseEvent')
+
+    def set_title(self, title):
+        self.setText(title)
+
+
+    def get_title(self):
+        return self.text()
+
+
+class BaseButtonEvents(QWidget):
+    """ Общие методы для реализации ховер еффекта """
+    def enterEvent(self, event):
+        self.setPixmap(self.pixmap_enter)
+        super().enterEvent(event)
+
+
+    def leaveEvent(self, event):
+        self.setPixmap(self.pixmap_leave)
+        super().leaveEvent(event)
+
+
+class HideButton(ClickedQLabel, BaseButtonEvents):
+    """ Кнопка сворачивания приложения """
+    def __init__(self, parent, x, y, size=26):
+        super(QLabel, self).__init__(parent)
+        self.pixmap = QtGui.QPixmap('images/hide.png')
+        self.pixmap_leave = self.pixmap.copy(0, 0, size, size)
+        self.pixmap_enter = self.pixmap.copy(size, 0, size*2, size)
         
-        # 
-        def move(event):
-            if(move.b_move):
-                x = event.globalX() + move.x_korr - move.lastPoint.x()
-                y = event.globalY() + move.y_korr - move.lastPoint.y()
-                if x >= screensize[0] - win.geometry().width():
-                    x = screensize[0] - win.geometry().width()
-                if x <= 0:
-                    x = 0
-                if y >= screensize[1] - win.geometry().height():
-                    y = screensize[1] - win.geometry().height()
-                if y <= 0:
-                    y = 0
-                win.move(x, y)
-                widget.setCursor(QtCore.Qt.SizeAllCursor)
-            return moveSource(event)
+        self.setGeometry(QtCore.QRect(x, y, size, size))
+        self.setPixmap(self.pixmap_leave)
+        self.setObjectName('minimize_button')
+        self.setToolTip('Свернуть')
+
+
+class CloseButton(ClickedQLabel, BaseButtonEvents):
+    """ Кнопка закрытия приложения """
+    def __init__(self, parent, x, y, size=26):
+        super(QLabel, self).__init__(parent)
+        self.pixmap = QtGui.QPixmap('images/close.png')
+        self.pixmap_leave = self.pixmap.copy(0, 0, size, size)
+        self.pixmap_enter = self.pixmap.copy(size, 0, size*2, size)
         
-        # 
-        def press(event):
-            if(event.button() == QtCore.Qt.LeftButton):
-                x_korr = win.frameGeometry().x() - win.geometry().x()
-                y_korr = win.frameGeometry().y() - win.geometry().y()
-                parent = widget
-                while not parent == win:
-                    x_korr -= parent.x()
-                    y_korr -= parent.y()
-                    parent = parent.parent()
-
-                move.__dict__.update({'lastPoint': event.pos(),  'b_move': True,  'x_korr': x_korr,  'y_korr': y_korr})
-            else:
-                move.__dict__.update({'b_move': False})
-                widget.setCursor(cursorShape)
-            return pressSource(event)
-
-        # 
-        def release(event):
-            if(hasattr(move, 'x_korr') and hasattr(move, 'y_korr')):
-                move.__dict__.update({'b_move': False})
-                widget.setCursor(cursorShape)
-                x = event.globalX() + move.x_korr - move.lastPoint.x()
-                y = event.globalY() + move.y_korr - move.lastPoint.y()
-
-                return releaseSource(event)
+        self.setGeometry(QtCore.QRect(x, y, size, size))
+        self.setPixmap(self.pixmap_leave)
+        self.setObjectName('close_button')
+        self.setToolTip('Закрыть')
 
 
-        setattr(widget, 'mouseMoveEvent', move)
-        setattr(widget, 'mousePressEvent', press)
-        setattr(widget, 'mouseReleaseEvent', release)
-        move.__dict__.update({'b_move': False})
+class Header:
+    """ Шапка приложения с заголовком и кнопками закрытия и сворачивания """
+    def __init__(self, parent):
+        self._height = 26
+        self.panel = Panel(parent, parent.width(), self._height)
+        self.title = Title(parent, parent.width()*0.8, self._height)
+        self.hide_button = HideButton(parent, parent.width()-self._height*2, 0, self._height)
+        self.close_button = CloseButton(parent, parent.width()-self._height, 0, self._height)
 
-        return widget
+
+    def width(self):
+        return self._width
+
+
+    def height(self):
+        return self._height
+
+
+class Background:
+    """ Задний фон приложения """
+    def __init__(self, parent, path):
+        self._parent = parent
+        # Белый фон с черными рамками
+        self._background = QLabel(self._parent)
+        self._background.setScaledContents(True)
+        self._background.setGeometry(QtCore.QRect(0, 0, self._parent.width(), self._parent.height()))
+        pixmap = QtGui.QPixmap(path)
+        pixmap_resized = pixmap.scaled(self._parent.width(), self._parent.height())
+        self._background.setPixmap(pixmap_resized)
+        self._background.setObjectName('background')
+        self._background_image = None
+
+
+    def set_image(self, path):   
+        """ Установка изображения на задний фон """
+        self._background_image = QLabel(self._parent)
+        self._background_image.setGeometry(QtCore.QRect(1, 0, self._parent.width()-2, self._parent.height()-1))
+        pixmap = QtGui.QPixmap(path)
+        pixmap_resized = pixmap.scaled(self._parent.width()-2, self._parent.height()-1)
+        self._background_image.setPixmap(pixmap_resized)
+        self._background_image.setObjectName('background_image')        
+        self._background_image.show()
+
+
+class BaseForm(QtCore.QObject):
+    closeHandler = QtCore.pyqtSignal(dict)
+    """ Вынесены общие методы для всех форм """    
+    def _customize_window(self):
+        """ Создание кастомного окна """
+        
+        # Убираем стандартную рамку
+        self.form.setWindowFlags(QtCore.Qt.FramelessWindowHint)
+        # Установка иконки 
+        icon = QtGui.QIcon()
+        icon.addPixmap(QtGui.QPixmap('images/icon.ico'), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.form.setWindowIcon(icon)
+
+        self.background = Background(self.form, 'images\\background.png')
+        self.background.set_image('images\\background_image')
+
+        self.header = Header(self.form)
+        self.header.hide_button.clicked.connect(self.minimize)
+        self.header.close_button.clicked.connect(self.closeEvent)
 
 
     def closeEvent(self):
         """ 
-        Базовый метод, вызывающийся при закрытии радио по нажатию на кастомный крестик.
-        В классе MainForm этот метод переназначается.
+        Базовый метод, вызывающийся при закрытии по нажатию на кастомный крестик.
         """
         self.close()
 
 
     def show(self):
         """ Отображение формы """
-        self.Form.show()
+        self.form.show()
 
 
     def hide(self):
         """ Скрытие формы """
-        self.Form.hide()
+        self.form.hide()
 
 
     def minimize(self):
         """ Сворачивает окно """
-        self.Form.showMinimized() 
+        self.form.showMinimized() 
 
 
     def close(self):
         """ Закрытие формы """
 
         # Если есть дочернее окно, закроет его
-        if hasattr(self, 'child'):
-            self.child.close()
+        if hasattr(self, 'child_form'):
+            self.child_form.close()
 
-        self.Form.close()
+        self.form.close()
 
 
     def set_title(self, title):
         """ Метод для установки заголовка окна """
-        self.titleLabel.setText(title)
+        self.header.title.set_title(title)
 
 
     def get_title(self):
         """ Метод для получения заголовка окна """
-        return self.titleLabel.text()
+        return self.header.title.get_title()
 
 
-# 
+    def set_background_image(self, path):
+        """ Установка изображения на задний фон """
+        self.background.set_image(path)
+
+
+class CustomSlider(QWidget):
+    valueChanged = QtCore.pyqtSignal(int)
+    """ Кастомный слайдер """
+    def __init__(self, parent, x, y, width=200):
+        super().__init__()
+        self.parent = parent
+        self.x = x
+        self.y = y
+        self.width = width
+
+        self.slider_position = 0
+        self.min_value = 0
+        self.max_value = 10
+
+        self.height = 4
+        self.slider_radius = 16
+
+        self.image = QtGui.QPixmap('images/slider.png')
+
+        self._background_line = self._make_background_line()
+        self._foreground_line = self._make_foreground_line()
+        self._slider = self._make_slider()
+
+        self.setValue(self.slider_position)
+
+
+    def _get_parent_window_x(self):
+        return self.parent.window().geometry().x()
+
+
+    def _get_slider_width(self):
+        return self.width-self.slider_radius
+
+    
+    def _get_slider_position(self):
+        return self.slider_position-self.x
+
+
+    def _get_slider_y(self):
+        return self.y-(self.slider_radius/2)+self.height/2
+
+
+    def _get_slider_min_position(self):
+        return self.x
+
+
+    def _get_slider_max_position(self):
+        return self._get_slider_min_position()+self._get_slider_width()
+
+
+    def _make_background_line(self):
+        background_line = QLabel(self.parent)
+        background_line.setObjectName('background_line')
+        background_line.setGeometry(QtCore.QRect(self.x, self.y, self.width, self.height))
+        background_line.setScaledContents(True)
+        background_line.setPixmap(self.image.copy(0, 2, 316, 4))
+
+        return background_line
+ 
+
+    def _make_foreground_line(self): 
+        foreground_line = QLabel(self.parent)
+        foreground_line.setObjectName('foreground_line')
+        foreground_line.setScaledContents(True)
+        foreground_line.setPixmap(self.image.copy(0, 6, 316, 4))
+        foreground_line.setGeometry(QtCore.QRect(self.x, self.y, self.slider_position, self.height))
+
+        return foreground_line
+
+     
+    def _make_slider(self):
+        slider = QLabel(self.parent)
+        slider.setObjectName('slider')
+        slider.setGeometry(QtCore.QRect(self.x, self._get_slider_y(), self.slider_radius, self.slider_radius))
+        slider.setScaledContents(True)
+        slider.setPixmap(self.image.copy(316, 0, self.slider_radius, self.slider_radius))
+        setattr(slider, 'mouseMoveEvent', self.mouseMoveEvent)
+        setattr(slider, 'mousePressEvent', self.mousePressEvent)
+        setattr(slider, 'mouseReleaseEvent', self.mouseReleaseEvent)
+
+        return slider
+
+
+    def _move(self, shift: int):
+        shift = shift - self.slider_radius//2
+
+        if shift <= self._get_slider_min_position():
+            self.slider_position = self._get_slider_min_position()
+        
+        elif shift >= self._get_slider_max_position():
+            self.slider_position = self._get_slider_max_position()
+
+        else:
+            self.slider_position = shift 
+        
+        self._slider.setGeometry(QtCore.QRect(self.slider_position, self._get_slider_y(), self.slider_radius, self.slider_radius))
+        self._foreground_line.setGeometry(QtCore.QRect(self.x, self.y, self.slider_position-self.x, self.height))
+
+
+    def mouseMoveEvent(self, event):
+        if self.lmb_presed:
+            self._move(event.globalX()-self._get_parent_window_x())
+            
+            # Проверка изменилось ли положение ползунка  
+            if self.__dict__.get('last_position') != self._get_slider_position():
+                self.changeEvent(event)
+
+        super().mouseMoveEvent(event)
+
+
+    def mousePressEvent(self, event):
+        if(event.button() == QtCore.Qt.LeftButton):
+            # Переменная start_position, нужна для проверки изменилась ли позиция слайдера после отжатия клавиши мышки
+            self.__dict__.update({'lmb_presed': True, 'last_position': self._get_slider_position()})
+        else:
+            self.__dict__.update({'lmb_presed': False})
+
+        self._slider.setCursor(QtCore.Qt.PointingHandCursor)
+        super().mousePressEvent(event)
+
+
+    def mouseReleaseEvent(self, event):
+        self.__dict__.update({'lmb_presed': False})
+        self._slider.setCursor(QtCore.Qt.ArrowCursor)
+        
+        super().mouseReleaseEvent(event)
+
+
+    def changeEvent(self, event):
+        self.valueChanged.emit(self.getValue())
+        
+        super().changeEvent(event)
+
+
+    def setValue(self, position: int):
+        if not isinstance(position, int):
+            raise ValueError
+
+        steps = self.max_value-self.min_value
+        tick = steps/self._get_slider_width()
+
+        self._move(self.x+int(position/tick))
+
+        self.valueChanged.emit(self.getValue())
+
+
+    def setMinimum(self, min_value: int):
+        if not isinstance(min_value, int):
+            raise ValueError
+
+        self.min_value = min_value
+
+
+    def setMaximum(self, max_value: int):
+        if not isinstance(max_value, int):
+            raise ValueError
+
+        self.max_value = max_value
+
+
+    def getValue(self):
+        steps = self.max_value-self.min_value
+        tick = steps/self._get_slider_width()
+
+        return int(self.min_value+self._get_slider_position()*tick)
+
+
+    def hide(self):
+        self._background_line.hide()
+        self._foreground_line.hide()
+        self._slider.hide()
+
+
+    def show(self):
+        self._background_line.show()
+        self._foreground_line.show()
+        self._slider.show()
+
+
+    def delete(self):
+        self._background_line.deleteLater()
+        self._foreground_line.deleteLater()
+        self._slider.deleteLater()
+        self.deleteLater()
+
+
+class PlayButton(ClickedQLabel, BaseButtonEvents):
+    """ Кнопка начала воспроизведения аудио """
+    def __init__(self, *args, **kwargs):
+        super(ClickedQLabel, self).__init__(*args, **kwargs)
+
+        self.pixmap = QtGui.QPixmap(os.path.join('images', 'play.png'))
+        self.pixmap_enter = self.pixmap.copy(14, 0, 28, 17)
+        self.pixmap_leave = self.pixmap.copy(0, 0, 14, 17)
+        self.setPixmap(self.pixmap_leave)
+
+
+class PauseButton(ClickedQLabel, BaseButtonEvents):
+    """ Кнопка остановки воспроизведения аудио """
+    def __init__(self, *args, **kwargs):
+        super(ClickedQLabel, self).__init__(*args, **kwargs)
+
+        self.pixmap = QtGui.QPixmap(os.path.join('images', 'pause.png'))
+        self.pixmap_enter = self.pixmap.copy(14, 0, 28, 17)
+        self.pixmap_leave = self.pixmap.copy(0, 0, 14, 17)
+        self.setPixmap(self.pixmap_leave)
+
+
+class PlaylistButton(ClickedQLabel, BaseButtonEvents):
+    """ Кнопка списка радиостанций """
+    def __init__(self, *args, **kwargs):
+        super(ClickedQLabel, self).__init__(*args, **kwargs)
+
+        self.pixmap = QtGui.QPixmap(os.path.join('images', 'playlist.png'))
+        self.pixmap_enter = self.pixmap.copy(23, 0, 46, 17)
+        self.pixmap_leave = self.pixmap.copy(0, 0, 23, 17)
+        self.setPixmap(self.pixmap_leave)
+
+
+class PrevButton(ClickedQLabel, BaseButtonEvents):
+    """ Кнопка включения предыдущей радиостанции """
+    def __init__(self, *args, **kwargs):
+        super(ClickedQLabel, self).__init__(*args, **kwargs)
+
+        self.pixmap = QtGui.QPixmap(os.path.join('images', 'prev.png'))
+        self.pixmap_enter = self.pixmap.copy(23, 0, 46, 17)
+        self.pixmap_leave = self.pixmap.copy(0, 0, 23, 17)
+        self.setPixmap(self.pixmap_leave)
+
+
+class NextButton(ClickedQLabel, BaseButtonEvents):
+    """ Кнопка включения следующей радиостанции """
+    def __init__(self, *args, **kwargs):
+        super(ClickedQLabel, self).__init__(*args, **kwargs)
+
+        self.pixmap = QtGui.QPixmap(os.path.join('images', 'next.png'))
+        self.pixmap_enter = self.pixmap.copy(23, 0, 46, 17)
+        self.pixmap_leave = self.pixmap.copy(0, 0, 23, 17)
+        self.setPixmap(self.pixmap_leave)
+
+
 class MainForm(BaseForm):
+    closeHandler = QtCore.pyqtSignal(dict)
+    """ Главное окно радио """
     def __init__(self):
-        self.form_width = 384
-        self.form_height = 60
-        self.Form = QWidget()
-        self.Form.setFixedSize(self.form_width, self.form_height)
-        self.Form.setObjectName('Form')
-        # Кастомизация базового окна
-        self._customize_window()
-        # Установка заголока окна
-        self.set_title('Лучшее радио!')
+        super(BaseForm, self).__init__()
+        self.form = QWidget()
+        self.form.setFixedSize(336, 80)
+        self.form.setObjectName('Form')
 
-        self.Form.SelectRadioStationForm = SelectRadioStationForm()
-        # Привязка поля Form.SelectRadioStationForm к полю Form.child для корректной работы метода close 
-        # обвяленного в классе BaseForm
-        self.Form.child = self.Form.SelectRadioStationForm 
-        self._close_handler = None
+        self._customize_window()
+
+        self.child_form = SelectRadioStationForm()
 
         self.font = QtGui.QFont()
         self.font.setFamily('Segoe UI Semibold')
         self.font.setPointSize(8)
         self.font.setWeight(75)
         self.font.setBold(True)
-       
-        self.playButton = QPushButton(self.Form)
-        self.playButton.setFont(self.font)
-        play_icon = QtGui.QIcon()
-        play_icon.addPixmap(QtGui.QPixmap(os.path.join('images', 'play.png')), 
-            QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.playButton.setIcon(play_icon)
-        self.playButton.setIconSize(QtCore.QSize(22, 22))
-        self.playButton.setGeometry(QtCore.QRect(2, 20, 34, 32))
-        self.playButton.setObjectName('playButton')
-        self.playButton.setFlat(True)
-        self.playButton.setToolTip('Играть')
 
-        self.prevButton = QPushButton(self.Form)
-        self.prevButton.setFont(self.font)
-        stop_icon = QtGui.QIcon()
-        stop_icon.addPixmap(QtGui.QPixmap(os.path.join('images', 'prev.png')), 
-            QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.prevButton.setIcon(stop_icon)
-        self.prevButton.setIconSize(QtCore.QSize(22, 22))
-        self.prevButton.setGeometry(QtCore.QRect(38, 20, 34, 32))
-        self.prevButton.setObjectName('prevButton')
-        self.prevButton.setFlat(True)
-        self.prevButton.setToolTip('Предыдущая радиостанция')
+        self.playButton = self._make_play_button()
+        self.pauseButton = self._make_pause_button()
+        self.pauseButton.hide()
+        self.prevButton = self._make_prev_button()
+        self.nextButton = self._make_next_button()
+        self.playlistButton = self._make_playlist_button()
+        self.playlistButton.clicked.connect(self.select_station_form)
+        self.volumeSlider = self._make_slider()
 
-        self.stopButton = QPushButton(self.Form)
-        self.stopButton.setFont(self.font)
-        stop_icon = QtGui.QIcon()
-        stop_icon.addPixmap(QtGui.QPixmap(os.path.join('images', 'stop.png')), 
-            QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.stopButton.setIcon(stop_icon)
-        self.stopButton.setIconSize(QtCore.QSize(22, 22))
-        self.stopButton.setGeometry(QtCore.QRect(74, 20, 34, 32))
-        self.stopButton.setObjectName('stopButton')
-        self.stopButton.setFlat(True)
-        self.stopButton.setToolTip('Стоп')
+        self.form.show()
+        QtCore.QMetaObject.connectSlotsByName(self.form)
 
-        self.nextButton = QPushButton(self.Form)
-        self.nextButton.setFont(self.font)
-        stop_icon = QtGui.QIcon()
-        stop_icon.addPixmap(QtGui.QPixmap(os.path.join('images', 'next.png')), 
-            QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.nextButton.setIcon(stop_icon)
-        self.nextButton.setIconSize(QtCore.QSize(22, 22))
-        self.nextButton.setGeometry(QtCore.QRect(110, 20, 34, 32))
-        self.nextButton.setObjectName('nextButton')
-        self.nextButton.setFlat(True)
-        self.nextButton.setToolTip('Следующая радиостанция')
-  
-        self.playlistButton = QPushButton(self.Form)
-        self.playlistButton.setFont(self.font)
-        playlist_icon = QtGui.QIcon()
-        playlist_icon.addPixmap(QtGui.QPixmap(os.path.join('images', 'playlist.png')), 
-            QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.playlistButton.setIcon(playlist_icon)
-        self.playlistButton.setIconSize(QtCore.QSize(22, 22))
-        self.playlistButton.setGeometry(QtCore.QRect(152, 20, 34, 32))
-        self.playlistButton.setObjectName('playlistButton')
-        self.playlistButton.setFlat(True)
-        self.playlistButton.setToolTip('Список радиостанций')
 
-        self.muteButton = QPushButton(self.Form)
-        self.muteButton.setFont(self.font)
-        sound_icon = QtGui.QIcon()
-        sound_icon.addPixmap(QtGui.QPixmap(os.path.join('images', 'sound-on.png')), 
-            QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.muteButton.setIcon(sound_icon)
-        self.muteButton.setIconSize(QtCore.QSize(24, 24))
-        self.muteButton.setGeometry(QtCore.QRect(196, 20, 34, 32))
-        self.muteButton.setObjectName('muteButton')
-        self.muteButton.setFlat(True)
-        self.muteButton.setToolTip('Выключить звук')
+    def _make_play_button(self):
+        playButton = PlayButton(self.form)
+        playButton.setGeometry(QtCore.QRect(46, 44, 14, 17))
+        playButton.setObjectName('playButton')
+        playButton.setToolTip('Играть')
 
-        self.volumeSlider = QSlider(self.Form)
-        self.volumeSlider.setGeometry(QtCore.QRect(232, 25, 142, 22))
-        self.volumeSlider.setMinimum(0)
-        self.volumeSlider.setMaximum(100)
-        self.volumeSlider.setProperty('value', 60)
-        self.volumeSlider.setOrientation(QtCore.Qt.Horizontal)
-        self.volumeSlider.setObjectName('volumeSlider')
+        return playButton
 
-        self._retranslateUi()
-        QtCore.QMetaObject.connectSlotsByName(self.Form)
 
-    # 
-    def _retranslateUi(self):
-        self.Form.show()
+    def _make_pause_button(self):
+        pauseButton = PauseButton(self.form)
+        pauseButton.setGeometry(QtCore.QRect(46, 44, 14, 17))
+        pauseButton.setObjectName('pauseButton')
+        pauseButton.setToolTip('Остановить')
+
+        return pauseButton
+
+
+    def _make_prev_button(self):
+        prevButton = PrevButton(self.form)
+        prevButton.setGeometry(QtCore.QRect(15, 44, 23, 17))
+        prevButton.setObjectName('prevButton')
+        prevButton.setToolTip('Предыдущая радиостанция')
+
+        return prevButton
+
+
+    def _make_next_button(self):
+        nextButton = NextButton(self.form)
+        nextButton.setGeometry(QtCore.QRect(70, 44, 23, 17))
+        nextButton.setObjectName('nextButton')
+        nextButton.setToolTip('Следующая радиостанция')
+
+        return nextButton
+
+
+    def _make_playlist_button(self):
+        playlistButton = PlaylistButton(self.form)
+        playlistButton.setFont(self.font)
+        playlistButton.setGeometry(QtCore.QRect(110, 44, 23, 17))
+        playlistButton.setObjectName('playlistButton')
+        playlistButton.setToolTip('Список радиостанций')
+
+        return playlistButton
+
+
+    def _make_slider(self):
+        slider = CustomSlider(self.form, 145, 50, 180)
+        slider.setMinimum(0)
+        slider.setMaximum(100)
+        slider.setValue(60)
+
+        return slider
 
 
     def closeEvent(self):
         """ Переназначение базового метода closeEvent класcа BaseForm """
         try:
-            self._close_handler()
+            config = {}
+            config['last_volume'] = self.get_position_volume_slider()
+            config['last_radio_station_name'] = self.get_title()
+            
+            self.closeHandler.emit(config)
+
         except (PermissionError, TypeError):
             show_error('Возникла критическая ошибка', 
                 'Не удалось сохранить текущую конфигурацию плейера')
@@ -315,112 +640,58 @@ class MainForm(BaseForm):
         else:
             self.close()
 
-    #
-    def _customize_window(self):
-        """ Переназначение базового метода _customize_window класcа BaseForm """
-        super()._customize_window()
-
-        self.hideHeaderButton = QPushButton(self.Form)
-        self.hideHeaderButton.setGeometry(QtCore.QRect(self.form_width-35, 2, 11, 11))
-        pixmap = QtGui.QIcon()
-        pixmap.addPixmap(QtGui.QPixmap(os.path.join('images', 'hide.png')), 
-            QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.hideHeaderButton.setIcon(pixmap)
-        self.hideHeaderButton.setObjectName('hide')
-        self.hideHeaderButton.clicked.connect(self.minimize)
-        self.hideHeaderButton.setFlat(True)
-        self.hideHeaderButton.setToolTip('Свернуть')
-
 
     @property
     def child(self):
-        return self.Form.child
-     
-
-    def set_close_handler(self, handler):
-        self._close_handler = handler
+        return self.child_form
 
 
-    def set_play_icon_for_play_button(self):
-        icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(os.path.join('images', 'play.png')), 
-            QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.playButton.setIcon(icon)
+    def show_play_button(self):
+        self.playButton.show()
 
 
-    def set_play_tooltip_for_the_play_button(self):
-        self.playButton.setToolTip('Играть')
+    def hide_play_button(self):
+        self.playButton.hide()
 
 
-    def set_pause_icon_for_play_button(self):
-        icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(os.path.join('images', 'pause.png')), 
-            QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.playButton.setIcon(icon)
+    def show_pause_button(self):
+        self.pauseButton.show()
 
+    
+    def hide_pause_button(self):
+        self.pauseButton.hide()
 
-    def set_pause_tooltip_for_the_play_button(self):
-        self.playButton.setToolTip('Пауза')
-
-
-    def set_sound_off_icon_for_switch_button(self):
-        icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(os.path.join('images', 'sound-off.png')), 
-            QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.muteButton.setIcon(icon)
-
-
-    def set_sound_off_tooltip_for_switch_button(self):
-        self.muteButton.setToolTip('Выключить звук')
-
-
-    def set_sound_on_icon_for_switch_button(self):
-        icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap(os.path.join('images', 'sound-on.png')), 
-            QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.muteButton.setIcon(icon)
-
-
-    def set_sound_on_tooltip_for_switch_button(self):
-        self.muteButton.setToolTip('Включить звук')
-
-
+    
     def set_position_volume_slider(self, value):
-        return self.volumeSlider.setProperty('value', value)
+        return self.volumeSlider.setValue(value)
 
 
     def get_position_volume_slider(self):
-        return self.volumeSlider.value()
+        return self.volumeSlider.getValue()
 
 
-    def select_station_form(self, callback):
-        self.Form.SelectRadioStationForm.listenStatioButton.clicked.connect(callback)
-        self.Form.SelectRadioStationForm.show()
+    def select_station_form(self):
+        self.child_form.show()
 
 
     def selected_station(self):
-        return self.Form.SelectRadioStationForm.get_selected_station()
+        return self.child_form.get_selected_station()
 
-# 
+ 
 class SelectRadioStationForm(BaseForm):
+    callback = QtCore.pyqtSignal(str)
+    """ Форма выбора радиостанции """
     def __init__(self):
-        self.form_width = 384
-        self.form_height = 115
-        self.Form = QWidget()
-        self.Form.setFixedSize(self.form_width, self.form_height)
-        self.Form.setObjectName('Form')
-        self.Form.setEnabled(True)
-        self.Form.setMouseTracking(False)
-        self.Form.setWindowFlags(QtCore.Qt.FramelessWindowHint)
+        super().__init__()
+        self.form = QWidget()
+        self.form.setFixedSize(336, 125)
+        self.form.setObjectName('Form')
+        self.form.setWindowFlags(QtCore.Qt.FramelessWindowHint)
         # Кастомизация базового окна
         self._customize_window()
-        # Установка заголока окна
         self.set_title('Выбор радиостанции')
 
-        self.AppendStationForm = AppendStationForm()
-        # Привязка поля AppendStationForm к полю child для корректной работы метода close 
-        # обвяленного в классе BaseForm
-        self.child = self.AppendStationForm
+        self.child_form = AppendStationForm()
 
         self.font = QtGui.QFont()
         self.font.setFamily('Segoe UI Semibold')
@@ -428,46 +699,43 @@ class SelectRadioStationForm(BaseForm):
         self.font.setWeight(75)
         self.font.setBold(True)
 
-        self.label = QLabel(self.Form)
+        self.label = QLabel(self.form)
         self.label.setObjectName(u"label")
-        self.label.setGeometry(QtCore.QRect(10, 25, 181, 16))
+        self.label.setGeometry(QtCore.QRect(10, 35, 181, 16))
+        self.label.setText('Все радиостанции')
+        self.label.setStyleSheet('color: rgb(255, 255, 255);')
 
-        self.comboBox_1 = QComboBox(self.Form)
+        self.comboBox_1 = QComboBox(self.form)
         self.comboBox_1.setObjectName(u"comboBox_1")
-        self.comboBox_1.setGeometry(QtCore.QRect(10, 50, 366, 22))
+        self.comboBox_1.setGeometry(QtCore.QRect(10, 60, 316, 22))
         # Добавляет радиостанции в выпадающий список 
         self.update_combobox(utils.RADIO_STATIONS)
 
-        self.appendStationButton = QPushButton(self.Form)
+        self.appendStationButton = QPushButton(self.form)
         self.appendStationButton.setFont(self.font)
-        self.appendStationButton.setGeometry(QtCore.QRect(10, 75, 142, 32))
-        self.appendStationButton.setObjectName('appendStationButton')
+        self.appendStationButton.setGeometry(QtCore.QRect(10, 85, 142, 32))
+        self.appendStationButton.setText('Добавить радиостанцию')
+        self.appendStationButton.setStyleSheet('color: rgb(255, 255, 255);')
         self.appendStationButton.setFlat(True)
         self.appendStationButton.clicked.connect(self.append_station_window_show)
 
-        self.deleteStatioButton = QPushButton(self.Form)
-        self.deleteStatioButton.setFont(self.font)
-        self.deleteStatioButton.setGeometry(QtCore.QRect(255, 75, 63, 32))
-        self.deleteStatioButton.setObjectName('deleteStatioButton')
-        self.deleteStatioButton.setFlat(True)
-        self.deleteStatioButton.clicked.connect(self.delete_station)
+        self.deleteStationButton = QPushButton(self.form)
+        self.deleteStationButton.setFont(self.font)
+        self.deleteStationButton.setGeometry(QtCore.QRect(200, 85, 63, 32))
+        self.deleteStationButton.setText('Удалить')
+        self.deleteStationButton.setStyleSheet('color: rgb(255, 255, 255);')
+        self.deleteStationButton.setFlat(True)
+        self.deleteStationButton.clicked.connect(self.delete_station)
 
-        self.listenStatioButton = QPushButton(self.Form)
-        self.listenStatioButton.setFont(self.font)
-        self.listenStatioButton.setGeometry(QtCore.QRect(315, 75, 63, 32))
-        self.listenStatioButton.setObjectName('listenStatioButton')
-        self.listenStatioButton.setFlat(True)
-        self.listenStatioButton.clicked.connect(self.get_selected_station)
+        self.listenStationButton = QPushButton(self.form)
+        self.listenStationButton.setFont(self.font)
+        self.listenStationButton.setGeometry(QtCore.QRect(265, 85, 63, 32))
+        self.listenStationButton.setText('Слушать')
+        self.listenStationButton.setStyleSheet('color: rgb(255, 255, 255);')
+        self.listenStationButton.setFlat(True)
+        self.listenStationButton.clicked.connect(self.listen_radiostation)
 
-        self._retranslateUi()
-        QtCore.QMetaObject.connectSlotsByName(self.Form)
-
-    # 
-    def _retranslateUi(self):
-        self.appendStationButton.setText(QApplication.translate('Form', 'Добавить радиостанцию', None))
-        self.deleteStatioButton.setText(QApplication.translate('Form', 'Удалить', None))
-        self.listenStatioButton.setText(QApplication.translate('Form', 'Слушать', None))
-        self.label.setText(QApplication.translate('Form', 'Все радиостанции', None))
+        QtCore.QMetaObject.connectSlotsByName(self.form)
 
 
     def update_combobox(self, lst: dict):
@@ -490,7 +758,7 @@ class SelectRadioStationForm(BaseForm):
 
         if show_question('Внимание', 'Вы действительно ходите удалить радиостанцию "%s"?' % radio_station_name):
             try:
-                # Добавление имени и адреса радиостанции в глобального словаря модуля utils
+                # Добавление имени и адреса радиостанции в глобальный словарь модуля utils
                 utils.delete_radio_station(radio_station_name)
             except KeyError:
                 show_error('Критическая ошибка', 'Радиостация %s не найдена!')
@@ -503,8 +771,8 @@ class SelectRadioStationForm(BaseForm):
 
     def append_station_window_show(self):
         """ Отображает форму добавления радиостанции """
-        self.AppendStationForm._callback = self.append_station
-        self.AppendStationForm.show()
+        self.child_form.callback.connect(self.append_station)
+        self.child_form.show()
 
 
     def get_selected_station(self):
@@ -512,22 +780,22 @@ class SelectRadioStationForm(BaseForm):
         return self.comboBox_1.currentText()
 
 
+    def listen_radiostation(self):
+        """ Передает выбранную радиостанцию в callback функцию """
+        self.callback.emit(self.get_selected_station())
+
+
 class AppendStationForm(BaseForm):
+    callback = QtCore.pyqtSignal(str, str)
+    """ Окно добавления новой радиостанции """
     def __init__(self):
-        self.form_width = 384
-        self.form_height = 135
-        self.Form = QWidget()
-        self.Form.setFixedSize(self.form_width, self.form_height)
-        self.Form.setObjectName('Form')
-        self.Form.setEnabled(True)
-        self.Form.setMouseTracking(False)
-        self.Form.setWindowFlags(QtCore.Qt.FramelessWindowHint)
+        super().__init__()
+        self.form = QWidget()
+        self.form.setFixedSize(336, 155)
+        self.form.setObjectName('Form')
         # Кастомизация базового окна
         self._customize_window()
-        # Установка заголока окна
         self.set_title('Добавление новой радиостанции')
-
-        self._callback = None
 
         self.font = QtGui.QFont()
         self.font.setFamily('Segoe UI Semibold')
@@ -535,36 +803,39 @@ class AppendStationForm(BaseForm):
         self.font.setWeight(75)
         self.font.setBold(True)
 
-        self.label = QLabel(self.Form)
+        self.label = QLabel(self.form)
         self.label.setObjectName(u"label")
-        self.label.setGeometry(QtCore.QRect(10, 25, 366, 16))
+        self.label.setGeometry(QtCore.QRect(10, 35, 316, 16))
+        self.label.setStyleSheet('color: rgb(255, 255, 255);')
 
-        self.nameLineEdit = QLineEdit(self.Form)
+        self.nameLineEdit = QLineEdit(self.form)
         self.nameLineEdit.setObjectName(u"nameLineEdit")
-        self.nameLineEdit.setGeometry(QtCore.QRect(10, 50, 366, 21))
+        self.nameLineEdit.setGeometry(QtCore.QRect(10, 95, 316, 21))
         self.nameLineEdit.setPlaceholderText('Имя радиостанции')
 
-        self.urlLineEdit = QLineEdit(self.Form)
+        self.urlLineEdit = QLineEdit(self.form)
         self.urlLineEdit.setObjectName(u"urlLineEdit")
-        self.urlLineEdit.setGeometry(QtCore.QRect(10, 75, 366, 21))
+        self.urlLineEdit.setGeometry(QtCore.QRect(10, 60, 316, 21))
         self.urlLineEdit.setPlaceholderText('URL адрес')
 
-        self.closeButton = QPushButton(self.Form)
+        self.closeButton = QPushButton(self.form)
         self.closeButton.setFont(self.font)
-        self.closeButton.setGeometry(QtCore.QRect(250, 100, 63, 32))
+        self.closeButton.setGeometry(QtCore.QRect(200, 120, 63, 32))
+        self.closeButton.setStyleSheet('color: rgb(255, 255, 255);')
         self.closeButton.setObjectName('pushButton_2')
         self.closeButton.setFlat(True)
         self.closeButton.clicked.connect(self.clearn_fields_and_hide)
 
-        self.addButton = QPushButton(self.Form)
+        self.addButton = QPushButton(self.form)
         self.addButton.setFont(self.font)
-        self.addButton.setGeometry(QtCore.QRect(315, 100, 63, 32))
+        self.addButton.setGeometry(QtCore.QRect(265, 120, 63, 32))
+        self.addButton.setStyleSheet('color: rgb(255, 255, 255);')
         self.addButton.setObjectName('addButton')
         self.addButton.setFlat(True)
         self.addButton.clicked.connect(self.append_station)
 
         self._retranslateUi()
-        QtCore.QMetaObject.connectSlotsByName(self.Form)
+        QtCore.QMetaObject.connectSlotsByName(self.form)
 
     # 
     def _retranslateUi(self):
@@ -611,7 +882,7 @@ class AppendStationForm(BaseForm):
             show_warning('Внимание', 'Укажите url-адрес радиостанции')
 
         else:
-            self._callback(radio_station_name, radio_station_url)
+            self.callback.emit(radio_station_name, radio_station_url)
             self._clearn_all_fields()
             self.hide()
 

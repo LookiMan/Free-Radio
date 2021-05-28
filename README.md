@@ -10,14 +10,15 @@
 
 В папке Free-Radio-Executable находится полностью готовая к использованию программа, скомпилированная с помощью [easycompiller](https://github.com/topdefaultuser/easycompiller).
 
-Версия ```python 3.6.0.```, компилятор ```PyInstaller```. 
+Версия ```python 3.7.1```, компилятор ```PyInstaller```. 
 
+Комманда для компиляции: ```python -m PyInstaller -y  -F -w --noupx -i"images\icon.ico" "main.py"```
 
 Хеш-сумма:
 
-MD5: D385F16521ECD8F5CCF12744C0314B7E
+MD5: 112DE5BAB07F36F0EB4DF85493D229BF
 
-SHA-256: 37808DB6EB35397FBE51E9D1B4C79F1A08A180133C19A8BB4ECAAAB68E732EE5
+SHA-256: 20EA3783DE415F398FEBFBDCDB25C51D0D115212495A1EB1E5CD57F5C9B74C72
 
 
 Можно декомпилировать приложение с помощью [EXE2PY-Decompiler](https://github.com/topdefaultuser/EXE2PY-Decompiler).
@@ -29,7 +30,9 @@ SHA-256: 37808DB6EB35397FBE51E9D1B4C79F1A08A180133C19A8BB4ECAAAB68E732EE5
 **Примечания**
 
 
-Если возникает ошибка при запуске скомпилированного  приложения.
+Если возникает ошибка при запуске *скомпилированного*  приложения.
+
+![]( https://github.com/topdefaultuser/Free-Radio/blob/main/Screenshots/ERROR.PNG)
 
 В окне проводника перейдите по пути: C:\Users\%USERNAME%\radio\ (если папка radio не существует, создайте ее)
 

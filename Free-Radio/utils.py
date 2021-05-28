@@ -1,10 +1,22 @@
 import json
 import shutil
 import platform
+import ctypes
 from pathlib import Path
 
 
+
 DEFAULT_RADIOS_JSON = Path(__file__).parent / "data" / "radios.json"
+
+
+def get_screen_width():
+    """ Получение ширины экрана """
+    return ctypes.windll.user32.GetSystemMetrics(0)
+
+
+def get_screen_height():
+    """ Получение высоты экрана """
+    return ctypes.windll.user32.GetSystemMetrics(1)
 
 
 def get_config_directory():
